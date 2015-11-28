@@ -11,8 +11,10 @@
 #include<condition_variable>
 #include<assert.h>
 #include"Timer.h"
+#include<unordered_map>
+#include<iostream>
 namespace Yuan_FrameWork {
-#define Log printf
+#define Log std::cout<<
 	/**
 	*default ThreadPoolPriority
 	*/
@@ -46,16 +48,17 @@ namespace Yuan_FrameWork {
 		uint8_t _CPUCore;
 		uint8_t _allocatedCPUCore;
 		std::queue<std::function<GenericType>> _globalThreadTaskQueue;
-		std::vector<std::thread> _threadVector;
+		std::unordered_map<std::thread::id, bool> _globalThreadTaskStateMap;
+		std::vector<std::thread > _threadVector;
 	public:
 		ThreadPool() :
 			_isThreadPoolWorking(false)
 			
 			, _CPUCore(std::thread::hardware_concurrency())
 			, _allocatedCPUCore(_CPUCore > 4 ? _CPUCore / 2 : _CPUCore) 
-			, _usedCPUCore(_allocatedCPUCore)
 		    , _ticker(){
-			ThreadPool::ThreadPolicyDynamicNum = 2;
+			_usedCPUCore = _allocatedCPUCore;
+			
 		}
 		ThreadPool(const ThreadPool &) = delete;
 		ThreadPool &operator=(const ThreadPool&) = delete;
@@ -75,7 +78,7 @@ namespace Yuan_FrameWork {
 		void stopWork();
 		~ThreadPool();
 	};
-
+	int Yuan_FrameWork::ThreadPool::ThreadPolicyDynamicNum = 2;
 	ThreadPool::~ThreadPool() {
 		if (_isThreadPoolWorking) {
 			stopWork();
@@ -91,6 +94,7 @@ namespace Yuan_FrameWork {
 		{
 			taskProcessor.join();
 		}
+		_ticker.stop();
 	}
 
 	/**
@@ -99,6 +103,7 @@ namespace Yuan_FrameWork {
 	*supporting race!
 	*/
 	void ThreadPool::StartWork() {
+		
 		if (_isThreadPoolWorking) {
 			Log("the thread pool is already working!\n");
 			return;
@@ -107,7 +112,11 @@ namespace Yuan_FrameWork {
 		for (uint8_t threadIndex = 0; threadIndex < this->_allocatedCPUCore; threadIndex++) {
 			_threadVector.emplace_back(
 				[this] {
-				for (;;) {
+					{
+						std::lock_guard<std::mutex> lock(this->_globalThreadPoolMtx);
+						_globalThreadTaskStateMap.emplace(std::this_thread::get_id(),true);
+					}
+				while (_globalThreadTaskStateMap.at(std::this_thread::get_id())) {
 					std::function<GenericType> task;
 					{
 						std::unique_lock<std::mutex> lock(this->_globalThreadPoolMtx);
@@ -121,35 +130,61 @@ namespace Yuan_FrameWork {
 						task = std::move(this->_globalThreadTaskQueue.front());
 						this->_globalThreadTaskQueue.pop();
 					}
-
 					task();
 				}
 			}
 			);
-			_ticker.setTimerHandler([this]() {
-				std::lock_guard<std::mutex> lck(this->_globalThreadPoolMtx);
-				if (_usedCPUCore < this->_globalThreadTaskQueue.size()) {
-
-					for (size_t __threadIndex = 0; __threadIndex < ThreadPool::ThreadPolicyDynamicNum; __threadIndex++) {
-						this->_threadVector.emplace_back(this->_threadVector.front());
-					}
-					_usedCPUCore += ThreadPool::ThreadPolicyDynamicNum;
-					return;
-				}
-				if (_usedCPUCore > this->_globalThreadTaskQueue.size() + ThreadPool::ThreadPolicyDynamicNum - 1) {
-					for (size_t __threadIndex = 0; __threadIndex < ThreadPool::ThreadPolicyDynamicNum; __threadIndex++) {
-						this->_threadVector.end()
-
-
-
-					}
-					_usedCPUCore -= ThreadPool::ThreadPolicyDynamicNum;
-					return;
-				}
-			}
-				);
 		}
-
+		_ticker.setTimerHandler([this]() {
+			if (this->_globalThreadTaskQueue.size() == 0) {
+				std::cout << ("no tasks...\n");
+				return;
+			}
+			std::unique_lock<std::mutex> lck(this->_globalThreadPoolMtx);
+			if (_usedCPUCore < this->_globalThreadTaskQueue.size()) {
+				for (size_t __threadIndex = 0; __threadIndex < Yuan_FrameWork::ThreadPool::ThreadPolicyDynamicNum; __threadIndex++) {
+					this->_threadVector.emplace_back(
+						[this] {
+							{
+								std::lock_guard<std::mutex> lock(this->_globalThreadPoolMtx);
+								_globalThreadTaskStateMap.emplace(std::this_thread::get_id(), true);
+							}
+							while (_globalThreadTaskStateMap.at(std::this_thread::get_id())) {
+								std::function<GenericType> task;
+								{
+									std::unique_lock<std::mutex> lock(this->_globalThreadPoolMtx);
+									this->_globalThreadTaskCV.wait(lock, [this]() {
+										return !_isThreadPoolWorking || !this->_globalThreadTaskQueue.empty()
+											; }
+									);
+									if (!_isThreadPoolWorking) {
+										return;
+									}
+									task = std::move(this->_globalThreadTaskQueue.front());
+									this->_globalThreadTaskQueue.pop();
+								}
+								task();
+							}
+					});
+					_globalThreadTaskStateMap.emplace(this->_threadVector.back().get_id(), true);
+					std::cout << ("adding core...\n");
+				}
+				_usedCPUCore += Yuan_FrameWork::ThreadPool::ThreadPolicyDynamicNum;
+				return;
+			}
+			if (_usedCPUCore > this->_globalThreadTaskQueue.size() + Yuan_FrameWork::ThreadPool::ThreadPolicyDynamicNum) {
+				for (size_t __threadIndex = 0; __threadIndex < Yuan_FrameWork::ThreadPool::ThreadPolicyDynamicNum; __threadIndex++) {
+					this->_globalThreadTaskStateMap[this->_threadVector.back().get_id()] = false;
+					//this->_threadVector.pop_back();
+					std::cout << ("minising core...\n");
+				} 
+				_usedCPUCore -= Yuan_FrameWork::ThreadPool::ThreadPolicyDynamicNum;
+				return;
+			}
+			return;
+		}
+		);
+		//_ticker.start(std::chrono::milliseconds(100));
 	}
 	/*
 	*add Tasks:add everything callable
