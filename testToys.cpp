@@ -17,50 +17,51 @@ int main() {
 		);
 	//add task with no params
 	threadPool->addNewTask([]() {
-		std::this_thread::sleep_for(std::chrono::seconds(11));
+		std::this_thread::sleep_for(std::chrono::milliseconds(11));
 		std::cout << "no param test cas11" << std::endl;
 	});
 	threadPool->addNewTask([]() {
-		std::this_thread::sleep_for(std::chrono::seconds(10));
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		std::cout << "no param test case10" << std::endl;
 	});
 	threadPool->addNewTask([]() {
-		std::this_thread::sleep_for(std::chrono::seconds(9));
+		std::this_thread::sleep_for(std::chrono::milliseconds(9));
 		std::cout << "no param test case9" << std::endl;
 	});
 	threadPool->addNewTask([]() {
-		std::this_thread::sleep_for(std::chrono::seconds(8));
+		std::this_thread::sleep_for(std::chrono::milliseconds(8));
 		std::cout << "no param test case8" << std::endl;
 	});
 	threadPool->addNewTask([]() {
-		std::this_thread::sleep_for(std::chrono::seconds(7));
+		std::this_thread::sleep_for(std::chrono::milliseconds(7));
 		std::cout << "no param test case7" << std::endl;
 	});
 	threadPool->addNewTask([]() {
-		std::this_thread::sleep_for(std::chrono::seconds(6));
+		std::this_thread::sleep_for(std::chrono::milliseconds(6));
 		std::cout << "no param test case6" << std::endl;
 	});
 	threadPool->addNewTask([]() {
-		std::this_thread::sleep_for(std::chrono::seconds(5));
+		std::this_thread::sleep_for(std::chrono::milliseconds(5));
 		std::cout << "no param test case5" << std::endl;
 	});
 	threadPool->addNewTask([]() {
-		std::this_thread::sleep_for(std::chrono::seconds(4));
+		std::this_thread::sleep_for(std::chrono::milliseconds(4));
 		std::cout << "no param test case4" << std::endl;
 	});
 	threadPool->addNewTask([]() {
-		std::this_thread::sleep_for(std::chrono::seconds(3));
+		std::this_thread::sleep_for(std::chrono::milliseconds(3));
 		std::cout << "no param test case3" << std::endl;
 	});
 	threadPool->addNewTask([]() {
-		std::this_thread::sleep_for(std::chrono::seconds(2));
+		std::this_thread::sleep_for(std::chrono::milliseconds(2));
 		std::cout << "no param test case2" << std::endl;
 	});
 	threadPool->addNewTask([]() {
-		std::this_thread::sleep_for(std::chrono::seconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		std::cout << "no param test case1111" << std::endl;
 	});
 	//If the pragme terminate now,our stdout won't be printed,so we add
-	while (1);
+	int a;
+	std::cin >> a;
 	return 0;
 }
