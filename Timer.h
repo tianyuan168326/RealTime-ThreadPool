@@ -4,17 +4,18 @@
 #include<thread>
 #include<condition_variable>
 #include<atomic>
+#include<iostream>
 namespace Yuan_FrameWork {
 	class Timer {
 	private:
 		std::chrono::system_clock::time_point __beg_timePoint;
 		std::chrono::system_clock::time_point __end_timePoint;
 		std::chrono::milliseconds __interval;
-		std::condition_variable __cv;
+		std::condition_variable_any __cv;
 		std::mutex __mtx;
 		std::function<void()> __callBack_function;
 		std::atomic_bool __isTicking;
-		std::thread *__tickingThread;
+		std::thread __tickingThread;
 	public:
 		Timer();
 		~Timer();
@@ -25,10 +26,10 @@ namespace Yuan_FrameWork {
 		void stop();
 		template<typename _Callable >
 		void setTimerHandler(_Callable);
+		void wakeUp();
 	};
 	Timer::Timer()
 		:__isTicking(true)
-		, __tickingThread(nullptr)
 		, __callBack_function(std::move(
 			[]() {}
 			)) {
@@ -37,24 +38,26 @@ namespace Yuan_FrameWork {
 		__interval = _interval;
 		__beg_timePoint = std::chrono::system_clock::now();
 		__end_timePoint = __beg_timePoint + _interval;
-		__tickingThread = &
-			(std::thread(
-				[this, &_interval]() {
+		__tickingThread = std::move(
+			std::thread(
+				[this]() {
 			while (__isTicking) {
-				std::unique_lock<std::mutex> lck(__mtx);
-				__cv.wait(lck,
-					[this]() {
-					return std::chrono::system_clock::now() > __end_timePoint;
-				});
-				__callBack_function();
-				__end_timePoint += _interval;
+					std::unique_lock<std::mutex> lck(__mtx);
+					__cv.wait_for(lck, __interval);
+					if (__callBack_function) {
+						__callBack_function();
+					}
+				__end_timePoint += __interval;
 			}
 		}));
+		
+	}
+	void Timer::wakeUp() {
+
 	}
 	void Timer::stop() {
 		__isTicking = false;
-		__tickingThread->join();
-		__tickingThread = nullptr;
+		__tickingThread.join();
 	}
 
 	template<typename _Callable >
