@@ -32,11 +32,11 @@ namespace Yuan_FrameWork {
 	*supporting everything which is callable
 	*surporting const/mutable parameter input
 	*/
-	
+
 	class ThreadPool {
 #define GenericType void()
-	public :
-		static int ThreadPolicyDynamicNum ;
+	public:
+		static int ThreadPolicyDynamicNum;
 	public:
 		std::atomic_bool _isThreadPoolWorking;
 		std::condition_variable _globalThreadTaskCV;
@@ -53,12 +53,12 @@ namespace Yuan_FrameWork {
 	public:
 		ThreadPool() :
 			_isThreadPoolWorking(false)
-			
+
 			, _CPUCore(std::thread::hardware_concurrency())
-			, _allocatedCPUCore(_CPUCore > 4 ? _CPUCore / 2 : _CPUCore) 
-		    , _ticker(){
+			, _allocatedCPUCore(_CPUCore > 4 ? _CPUCore / 2 : _CPUCore)
+			, _ticker() {
 			_usedCPUCore = _allocatedCPUCore;
-			
+
 		}
 		ThreadPool(const ThreadPool &) = delete;
 		ThreadPool &operator=(const ThreadPool&) = delete;
@@ -103,7 +103,7 @@ namespace Yuan_FrameWork {
 	*supporting race!
 	*/
 	void ThreadPool::StartWork() {
-		
+
 		if (_isThreadPoolWorking) {
 			Log("the thread pool is already working!\n");
 			return;
@@ -114,29 +114,29 @@ namespace Yuan_FrameWork {
 				[this] {
 					{
 						std::lock_guard<std::mutex> lock(this->_globalThreadPoolMtx);
-						_globalThreadTaskStateMap.emplace(std::this_thread::get_id(),true);
+						_globalThreadTaskStateMap.emplace(std::this_thread::get_id(), true);
 					}
-				while (_globalThreadTaskStateMap.at(std::this_thread::get_id())) {
-					std::function<GenericType> task;
-					{
-						std::unique_lock<std::mutex> lock(this->_globalThreadPoolMtx);
-						this->_globalThreadTaskCV.wait(lock, [this]() {
-							return !_isThreadPoolWorking || !this->_globalThreadTaskQueue.empty()
-								; }
-						);
-						if (!_isThreadPoolWorking) {
-							return;
+					while (_globalThreadTaskStateMap.at(std::this_thread::get_id())) {
+						std::function<GenericType> task;
+						{
+							std::unique_lock<std::mutex> lock(this->_globalThreadPoolMtx);
+							this->_globalThreadTaskCV.wait(lock, [this]() {
+								return !_isThreadPoolWorking || !this->_globalThreadTaskQueue.empty()
+									; }
+							);
+							if (!_isThreadPoolWorking) {
+								return;
+							}
+							task = std::move(this->_globalThreadTaskQueue.front());
+							this->_globalThreadTaskQueue.pop();
 						}
-						task = std::move(this->_globalThreadTaskQueue.front());
-						this->_globalThreadTaskQueue.pop();
+						task();
 					}
-					task();
-				}
 			}
 			);
 		}
 		_ticker.setTimerHandler([this]() {
-			if (this->_globalThreadTaskQueue.size() == 0) {
+			if (this->_threadVector.size() == 0) {
 				std::cout << ("no tasks...\n");
 				return;
 			}
@@ -177,14 +177,14 @@ namespace Yuan_FrameWork {
 					this->_globalThreadTaskStateMap[this->_threadVector.back().get_id()] = false;
 					//this->_threadVector.pop_back();
 					std::cout << ("minising core...\n");
-				} 
+				}
 				_usedCPUCore -= Yuan_FrameWork::ThreadPool::ThreadPolicyDynamicNum;
 				return;
 			}
 			return;
 		}
 		);
-		//_ticker.start(std::chrono::milliseconds(100));
+		_ticker.start(std::chrono::milliseconds(100));
 	}
 	/*
 	*add Tasks:add everything callable
@@ -209,4 +209,3 @@ namespace Yuan_FrameWork {
 }
 
 #endif // THREADPOOL
-
